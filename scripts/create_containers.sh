@@ -17,7 +17,7 @@ STORAGE="local"
 BRIDGE="vmbr0"
 VMID=200
 
-echo "VERSION: 1.0.1"
+echo "VERSION: 1.0.2"
 
 # Function to find latest Ubuntu 24.04 template
 function find_latest_template() {
