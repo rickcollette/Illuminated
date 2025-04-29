@@ -32,7 +32,7 @@ PASSWORDS_FILE="/tmp/container-passwords.txt"
 > "$PASSWORDS_FILE"
 
 for name in "${!containers[@]}"; do
-  echo "\n📦 Creating LXC: $name (VMID $VMID)..."
+  echo "📦 Creating LXC: $name (VMID $VMID)..."
 
   ROOT_PW="$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c20)"
   echo "$name (CTID $VMID): $ROOT_PW" >> "$PASSWORDS_FILE"
