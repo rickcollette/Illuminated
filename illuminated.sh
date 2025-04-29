@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export VERSION="1.0.9"
+export VERSION="1.0.10"
 
 # Require DOMAIN and DISCORD_WEBHOOK
 if [[ -z "${DOMAIN:-}" || -z "${DISCORD_WEBHOOK:-}" ]]; then
@@ -53,27 +53,25 @@ run_script() {
 
 # Mode-based logic
 if [[ "$MODE" == "--skip-existing" ]]; then
-  run_script create_containers.sh
-  run_script setup_papermc_server.sh
-  run_script setup_bluemap.sh
-  run_script setup_backup_service.sh
-  run_script setup_static_website.sh
-  pause_for_fw
-  run_script setup_reverse_proxy.sh
-  run_script setup_ssl_certbot.sh
+run_script create_containers.sh
+run_script setup_papermc_server.sh
+run_script setup_bluemap.sh
+run_script setup_backup_service.sh
+run_script setup_static_website.sh
+run_script setup_reverse_proxy.sh
+run_script firewalls.sh
 elif [[ "$MODE" == "--reinstall-bluemap" ]]; then
   run_script setup_bluemap.sh
 elif [[ "$MODE" == "--reinstall-website" ]]; then
   run_script setup_static_website.sh
 else
-  run_script create_containers.sh
-  run_script setup_papermc_server.sh
-  run_script setup_bluemap.sh
-  run_script setup_backup_service.sh
-  run_script setup_static_website.sh
-  run_script setup_reverse_proxy.sh
-  pause_for_fw
-  run_script setup_ssl_certbot.sh
+run_script create_containers.sh
+run_script setup_papermc_server.sh
+run_script setup_bluemap.sh
+run_script setup_backup_service.sh
+run_script setup_static_website.sh
+run_script setup_reverse_proxy.sh
+run_script firewalls.sh
 fi
 
 # Final screen

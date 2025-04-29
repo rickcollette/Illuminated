@@ -1,5 +1,11 @@
 # 📜 Changelog
 
+## [1.0.10] - 2025-05-02
+
+### Added for 1.0.10
+
+- Added auto detection of IPs and firewalls/port forwarding
+
 ## [1.0.9] - 2025-05-02
 
 ### Added for 1.0.9

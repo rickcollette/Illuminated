@@ -58,10 +58,10 @@ for name in "${!containers_ram[@]}"; do
       continue
     fi
 
-    msg_info "Backing up container $name (VMID $VMID)..."
-    BACKUP_PATH="/var/lib/vz/dump/${name}-$(date +%Y%m%d-%H%M%S).tar.zst"
-    vzdump $VMID --dumpdir /var/lib/vz/dump --mode stop --compress zstd
-    msg_ok "Backup complete: $BACKUP_PATH"
+#    msg_info "Backing up container $name (VMID $VMID)..."
+#    BACKUP_PATH="/var/lib/vz/dump/${name}-$(date +%Y%m%d-%H%M%S).tar.zst"
+#    vzdump $VMID --dumpdir /var/lib/vz/dump --mode stop --compress zstd
+#    msg_ok "Backup complete: $BACKUP_PATH"
 
     msg_info "Stopping container $VMID ($name)..."
     pct stop $VMID || msg_info "Container already stopped."
