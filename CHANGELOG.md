@@ -1,5 +1,11 @@
 # 📜 Changelog
 
+## [1.0.5] - 2025-05-02
+
+### Added for 1.0.5
+
+- shuffled around the user creation bits.
+
 ## [1.0.4] - 2025-05-02
 
 ### Added for 1.0.4

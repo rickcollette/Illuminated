@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export VERSION="1.0.4"
+export VERSION="1.0.5"
 
 # Require DOMAIN and DISCORD_WEBHOOK
 if [[ -z "${DOMAIN:-}" || -z "${DISCORD_WEBHOOK:-}" ]]; then
