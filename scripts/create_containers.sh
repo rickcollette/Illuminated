@@ -43,8 +43,16 @@ ensure_template "$TEMPLATE_NAME"
 # Now create containers
 for name in "${!containers[@]}"; do
   echo "📦 Creating LXC: $name (VMID $VMID)..."
-  pct create $VMID $TEMPLATE --hostname $name --storage $STORAGE --memory ${containers[$name]} --cores 2 --net0 name=eth0,bridge=$BRIDGE,ip=dhcp --unprivileged 1 --features nesting=1
-  pct start $VMID
+pct create $VMID $TEMPLATE \
+  -hostname $name \
+  -storage $STORAGE \
+  -rootfs ${STORAGE}:8G \
+  -memory ${containers[$name]} \
+  -cores 2 \
+  -net0 name=eth0,bridge=$BRIDGE,ip=dhcp \
+  -unprivileged 1 \
+  -features nesting=1
+pct start $VMID
   ((VMID++))
 done
 
