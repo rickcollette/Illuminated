@@ -89,6 +89,7 @@ for name in "${!containers[@]}"; do
   ((VMID++))
 done
 
+msg_info "Creating papermc-server user..."
 pct exec 200 -- bash -c "
   useradd -m -s /bin/bash papermc &&
   mkdir -p /home/papermc &&
