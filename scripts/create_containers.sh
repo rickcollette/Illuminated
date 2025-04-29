@@ -5,6 +5,7 @@ source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/m
 
 header_info "Creating LXC Containers"
 
+# Define container specs
 declare -A containers_ram=(
   [papermc-server]=12288
   [papermc-bluemap]=4096
@@ -29,7 +30,6 @@ declare -A container_cores=(
   [papermc-proxy]=1
 )
 
-
 TEMPLATE_STORAGE="local"
 CONTAINER_STORAGE="local-lvm"
 BRIDGE="vmbr0"
@@ -48,10 +48,10 @@ fi
 PASSWORDS_FILE="/tmp/container-passwords.txt"
 > "$PASSWORDS_FILE"
 
-for name in "${!containers[@]}"; do
+for name in "${!containers_ram[@]}"; do
   echo -e "\n📦 Processing container: $name (VMID $VMID)..."
 
-  if pct status $VMID &>/dev/null; then
+  if pct list | awk '{print $1}' | grep -q "^$VMID$"; then
     if [[ "${1:-default}" == "--skip-existing" ]]; then
       msg_ok "Skipping existing container $name (VMID $VMID)"
       ((VMID++))
@@ -63,10 +63,16 @@ for name in "${!containers[@]}"; do
     vzdump $VMID --dumpdir /var/lib/vz/dump --mode stop --compress zstd
     msg_ok "Backup complete: $BACKUP_PATH"
 
+    msg_info "Stopping container $VMID ($name)..."
+    pct stop $VMID || msg_info "Container already stopped."
+
     msg_info "Destroying container $VMID ($name)..."
-    pct stop $VMID || true
-    pct destroy $VMID
-    msg_ok "Destroyed container $name"
+    if pct destroy $VMID; then
+      msg_ok "Destroyed container $name"
+    else
+      msg_error "Failed to destroy container $name (VMID $VMID)"
+      exit 1
+    fi
   fi
 
   ROOT_PW="$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c20)"
@@ -78,7 +84,7 @@ for name in "${!containers[@]}"; do
     -storage $CONTAINER_STORAGE \
     -memory ${containers_ram[$name]} \
     -rootfs ${CONTAINER_STORAGE}:${containers_disk[$name]} \
-    -cores ${containers_cores[$name]} \
+    -cores ${container_cores[$name]} \
     -net0 name=eth0,bridge=$BRIDGE,ip=dhcp \
     -password "$ROOT_PW" \
     -unprivileged 1 \
@@ -89,12 +95,12 @@ for name in "${!containers[@]}"; do
   ((VMID++))
 done
 
-msg_info "Creating papermc-server user..."
 pct exec 200 -- bash -c "
   useradd -m -s /bin/bash papermc &&
   mkdir -p /home/papermc &&
   chown papermc:papermc /home/papermc
 "
+
 msg_info "Creating passwds file for papermc-server..."
 PAPERMCPATH="/home/papermc/container-passwords.txt"
 pct exec 200 -- mkdir -p /home/papermc
