@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export VERION="1.0.4"
+
 # Require DOMAIN and DISCORD_WEBHOOK
 if [[ -z "${DOMAIN:-}" || -z "${DISCORD_WEBHOOK:-}" ]]; then
   echo "❌ ERROR: You must run this script with DOMAIN and DISCORD_WEBHOOK set!"
@@ -20,7 +22,7 @@ export BRIDGE="vmbr0"
 # Load build helpers
 source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
 
-APP="LouMinadiCraft Illuminated"
+APP="LouMinadiCraft Illuminated v${VERSION}"
 header_info "$APP Setup"
 catch_errors
 
@@ -59,7 +61,7 @@ fi
 
 # Final screen
 clear
-header_info "🎉 LouMinadiCraft Illuminated Installed Successfully!"
+header_info "🎉 LouMinadiCraft Illuminated v${VERSION} Installed Successfully!"
 msg_ok "Minecraft Server ready!"
 msg_ok "BlueMap ready!"
 msg_ok "Static website ready!"
