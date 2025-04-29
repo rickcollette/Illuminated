@@ -89,7 +89,7 @@ for name in "${!containers[@]}"; do
   ((VMID++))
 done
 
-
+msg_info "Creating passwds file for papermc-server..."
 PAPERMCPATH="/home/papermc/container-passwords.txt"
 pct exec 200 -- mkdir -p /home/papermc
 pct push 200 "$PASSWORDS_FILE" "$PAPERMCPATH" --perms 600
