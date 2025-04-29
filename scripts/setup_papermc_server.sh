@@ -3,6 +3,12 @@ set -euo pipefail
 source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
 echo "🎮 Setting up PaperMC server..."
 
+pct exec 200 -- bash -c "
+  useradd -m -s /bin/bash papermc &&
+  mkdir -p /home/papermc &&
+  chown papermc:papermc /home/papermc
+"
+
 # Install Java and curl
 pct exec 200 -- bash -c "
   apt update &&
