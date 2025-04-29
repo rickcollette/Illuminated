@@ -40,7 +40,7 @@ for name in "${!containers[@]}"; do
   pct create $VMID $TEMPLATE \
     -hostname $name \
     -storage $CONTAINER_STORAGE \
-    -rootfs ${CONTAINER_STORAGE}:8G \
+    -rootfs ${CONTAINER_STORAGE}:8 \
     -memory ${containers[$name]} \
     -cores 2 \
     -net0 name=eth0,bridge=$BRIDGE,ip=dhcp \
