@@ -1,9 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🔒 Setting up SSL with Certbot..."
+echo "🔐 Setting up SSL with Certbot..."
 
-echo "⚠️  After running, manually run certbot inside the papermc-proxy container:"
-echo "   pct exec 204 -- certbot --nginx -d website.yourdomain.com"
+pct exec 204 -- bash -c "
+  apt update &&
+  apt install -y certbot python3-certbot-nginx &&
+  certbot --nginx --non-interactive --agree-tos --redirect --email admin@$MYDOMAIN -d $DOMAIN
+"
 
-echo "✅ Certbot ready."
+echo "✅ SSL Certificate Obtained and Installed."

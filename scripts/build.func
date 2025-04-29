@@ -10,7 +10,7 @@ NC='\033[0m' # No Color
 BOLD="\033[1m"
 TAB="  "
 CM="${TAB}✔️${TAB}"
-CROSS="${TAB}✖️${TAB}"
+CROSS="${TAB}✖️${TAB}'
 
 # Functions for Messaging
 msg_info() {
@@ -31,22 +31,21 @@ header_info() {
   echo -e "========================================${NC}"
 }
 
-# Catch unexpected errors
 catch_errors() {
   trap 'msg_error "An unexpected error occurred at line $LINENO: $BASH_COMMAND" && exit 1' ERR
 }
 
-# Basic Proxmox Environment Checks
+# Check Environment
 shell_check() {
   if [[ "$(basename "$SHELL")" != "bash" ]]; then
-    msg_error "Your shell is not Bash. Please use Bash to run these scripts."
+    msg_error "Default shell is not Bash. Please use Bash."
     exit 1
   fi
 }
 
 root_check() {
   if [[ "$(id -u)" -ne 0 ]]; then
-    msg_error "Please run this script as root."
+    msg_error "Run this script as root."
     exit 1
   fi
 }
@@ -60,44 +59,21 @@ pve_check() {
 
 arch_check() {
   if [[ "$(dpkg --print-architecture)" != "amd64" ]]; then
-    msg_error "This script only supports amd64 architecture."
+    msg_error "Only amd64 architecture supported."
     exit 1
   fi
 }
 
-# Basic storage check
 check_container_storage() {
-  STORAGE=$1
-  if ! pvesm status | grep -qw "$STORAGE"; then
-    msg_error "Storage '$STORAGE' not found on this node."
+  local storage=$1
+  if ! pvesm status | grep -qw "$storage"; then
+    msg_error "Storage '$storage' not found."
     exit 1
   fi
 }
 
-# Template Downloader
-download_template() {
-  local storage=$1
-  local template_name=$2
-
-  if ! pveam list $storage | grep -q "$template_name"; then
-    msg_info "Downloading template $template_name..."
-    pveam download $storage $template_name
-    msg_ok "Template $template_name downloaded."
-  else
-    msg_ok "Template $template_name already present in $storage."
-  fi
+# Dynamically get container IP
+get_container_ip() {
+  local ctid=$1
+  pct exec "$ctid" -- ip -4 addr show eth0 | awk '/inet / {print $2}' | cut -d/ -f1
 }
-
-# Simple container builder (for raw pct create)
-build_container() {
-  pct create ${CTID} ${OSTEMPLATE} \
-    --rootfs ${STORAGE}:${DISK} \
-    -hostname ${HOSTNAME} \
-    -memory ${MEMORY} \
-    -cores ${CORES} \
-    -net0 name=eth0,bridge=${BRIDGE},ip=dhcp \
-    -unprivileged 1 \
-    -features nesting=1 \
-    -tags ${TAGS}
-}
-

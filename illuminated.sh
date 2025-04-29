@@ -12,6 +12,10 @@ catch_errors
 
 BASE_URL="https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts"
 
+# Prompt for DOMAIN
+read -rp "🌐 Enter your domain (example: illuminated.yourdomain.com): " DOMAIN
+export DOMAIN
+
 function run_script() {
   local script_name=$1
   msg_info "Running $script_name..."
@@ -36,8 +40,9 @@ msg_ok "Static website ready!"
 msg_ok "SSL secured reverse proxy ready!"
 
 echo -e "\nAccess Your Services:"
-echo -e "${CYAN}• Minecraft Server:${NC} Connect using your domain/IP at port 25565"
-echo -e "${CYAN}• Static Website:${NC} https://yourdomain.com"
-echo -e "${CYAN}• BlueMap:${NC} https://yourdomain.com/map"
+echo -e "${CYAN}• Minecraft Server:${NC} Connect to ${DOMAIN} (port 25565)"
+echo -e "${CYAN}• Static Website:${NC} https://${DOMAIN}"
+echo -e "${CYAN}• BlueMap:${NC} https://${DOMAIN}/map"
 
 echo -e "\n${GREEN}Installation Completed Successfully!${NC}\n"
+

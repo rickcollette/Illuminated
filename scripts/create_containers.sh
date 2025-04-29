@@ -1,47 +1,76 @@
-#!/usr/bin/env bash
-source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
+#!/bin/bash
+set -euo pipefail
 
-header_info "Creating LXC Containers"
-catch_errors
+echo "📦 Creating LXC Containers..."
 
-# Settings
-TEMPLATE_STORAGE="local"
-STORAGE="local-lvm"
-BRIDGE="vmbr0"
-TAGS="minecraft"
+TEMPLATE="local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
 
-# Latest Template
-TEMPLATE_NAME=$(pveam available | grep ubuntu-24.04-standard | sort | tail -n 1 | awk '{print $2}')
-pveam download $TEMPLATE_STORAGE $TEMPLATE_NAME || true
-OSTEMPLATE="${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE_NAME}"
+# Ensure template exists
+if ! pveam list local | grep -q "ubuntu-24.04-standard"; then
+  msg_info "Downloading Ubuntu 24.04 template..."
+  pveam download local ubuntu-24.04-standard_24.04-2_amd64.tar.zst
+fi
 
-CTID=200
+# Define CTIDs
+CTID_PAPERMCSERVER=200
+CTID_BLUEMAP=201
+CTID_BACKUPS=202
+CTID_WEBSITE=203
+CTID_PROXY=204
 
-declare -A containers=(
-  [papermc-server]=12288
-  [papermc-bluemap]=4096
-  [papermc-backups]=1024
-  [papermc-website]=512
-  [papermc-proxy]=512
-)
+# Create PaperMC Server
+pct create $CTID_PAPERMCSERVER $TEMPLATE \
+  -hostname papermc-server \
+  -storage local-lvm \
+  -memory 12288 -cores 4 \
+  -net0 name=eth0,bridge=vmbr0,ip=dhcp \
+  -unprivileged 1 \
+  -features nesting=1
+pct start $CTID_PAPERMCSERVER
+msg_ok "PaperMC Server container created."
 
-for container in "${!containers[@]}"; do
-  HOSTNAME=$container
-  MEMORY=${containers[$container]}
-  CORES=2
-  DISK=8
+# Create BlueMap Server
+pct create $CTID_BLUEMAP $TEMPLATE \
+  -hostname papermc-bluemap \
+  -storage local-lvm \
+  -memory 4096 -cores 2 \
+  -net0 name=eth0,bridge=vmbr0,ip=dhcp \
+  -unprivileged 1 \
+  -features nesting=1
+pct start $CTID_BLUEMAP
+msg_ok "BlueMap container created."
 
-  msg_info "Creating $HOSTNAME (CTID $CTID)..."
-  pct create ${CTID} ${OSTEMPLATE} \
-    --rootfs ${STORAGE}:${DISK} \
-    --hostname ${HOSTNAME} \
-    --memory ${MEMORY} \
-    --cores ${CORES} \
-    --net0 name=eth0,bridge=${BRIDGE},ip=dhcp \
-    --unprivileged 1 \
-    --features nesting=1 \
-    --tags ${TAGS}
-  pct start $CTID
-  msg_ok "$HOSTNAME started!"
-  ((CTID++))
-done
+# Create Backups Server
+pct create $CTID_BACKUPS $TEMPLATE \
+  -hostname papermc-backups \
+  -storage local-lvm \
+  -memory 1024 -cores 1 \
+  -net0 name=eth0,bridge=vmbr0,ip=dhcp \
+  -unprivileged 1 \
+  -features nesting=1
+pct start $CTID_BACKUPS
+msg_ok "Backup container created."
+
+# Create Website Server
+pct create $CTID_WEBSITE $TEMPLATE \
+  -hostname papermc-website \
+  -storage local-lvm \
+  -memory 512 -cores 1 \
+  -net0 name=eth0,bridge=vmbr0,ip=dhcp \
+  -unprivileged 1 \
+  -features nesting=1
+pct start $CTID_WEBSITE
+msg_ok "Static website container created."
+
+# Create Reverse Proxy Server
+pct create $CTID_PROXY $TEMPLATE \
+  -hostname papermc-proxy \
+  -storage local-lvm \
+  -memory 512 -cores 1 \
+  -net0 name=eth0,bridge=vmbr0,ip=dhcp \
+  -unprivileged 1 \
+  -features nesting=1
+pct start $CTID_PROXY
+msg_ok "Reverse Proxy container created."
+
+echo "✅ All LXC Containers Created!"
