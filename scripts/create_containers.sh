@@ -11,7 +11,7 @@ declare -A containers=(
   [papermc-proxy]=512
 )
 
-TEMPLATE="local:vztmpl/ubuntu-24.04-standard_24.04-1_amd64.tar.zst"
+TEMPLATE="local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
 STORAGE="local-lvm"
 BRIDGE="vmbr0"
 VMID=200
