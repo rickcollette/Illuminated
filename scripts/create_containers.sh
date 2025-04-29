@@ -95,11 +95,9 @@ for name in "${!containers_ram[@]}"; do
   ((VMID++))
 done
 
-pct exec 200 -- bash -c "
-  useradd -m -s /bin/bash papermc &&
-  mkdir -p /home/papermc &&
-  chown papermc:papermc /home/papermc
-"
+msg_info "Creating papermc user inside papermc-server..."
+pct exec 200 -- bash -c "id -u papermc &>/dev/null || useradd -m -s /bin/bash papermc"
+pct exec 200 -- bash -c "mkdir -p /home/papermc && chown papermc:papermc /home/papermc"
 
 msg_info "Creating passwds file for papermc-server..."
 PAPERMCPATH="/home/papermc/container-passwords.txt"
