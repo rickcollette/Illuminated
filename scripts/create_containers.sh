@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 set -euo pipefail
 
 echo "🚀 Creating LXC containers..."
