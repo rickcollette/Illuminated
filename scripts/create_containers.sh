@@ -91,7 +91,7 @@ for ctid in "${!containers[@]}"; do
   pct create "$ctid" "$TEMPLATE" \
     -hostname "$name" \
     -storage "$STORAGE" \
-    -rootfs "${STORAGE}:8G" \
+    -rootfs "${STORAGE}:8" \
     -memory 1024 \
     -cores 2 \
     -net0 name=eth0,bridge="$BRIDGE",ip=dhcp \
