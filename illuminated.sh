@@ -75,7 +75,7 @@ run_script firewalls.sh
 fi
 
 # Final screen
-clear
+# clear
 header_info "🎉 LouMinadiCraft Illuminated v${VERSION} Installed Successfully!"
 msg_ok "Minecraft Server ready!"
 msg_ok "BlueMap ready!"
