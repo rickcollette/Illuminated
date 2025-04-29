@@ -1,104 +1,60 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
 
 source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
 
-# Define container settings
-declare -A containers
-containers=(
-  [200]="papermc-server"
-  [201]="papermc-bluemap"
-  [202]="papermc-backups"
-  [203]="papermc-website"
-  [204]="papermc-proxy"
+header_info "Creating LXC Containers"
+
+declare -A containers=(
+  [papermc-server]=12288
+  [papermc-bluemap]=4096
+  [papermc-backups]=1024
+  [papermc-website]=512
+  [papermc-proxy]=512
 )
 
-TEMPLATE="local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
 STORAGE="local-lvm"
 BRIDGE="vmbr0"
+VMID=200
+TEMPLATE_NAME="ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
+TEMPLATE="$STORAGE:vztmpl/$TEMPLATE_NAME"
 
-MODE="${1:-default}"  # default, skip-existing, reinstall-website, reinstall-bluemap
+pveam update
+if ! pveam list $STORAGE | grep -q "$TEMPLATE_NAME"; then
+  msg_info "Downloading missing template..."
+  pveam download $STORAGE "$TEMPLATE_NAME"
+else
+  msg_ok "Template already available: $TEMPLATE_NAME"
+fi
 
-# Function to backup container data
-backup_container() {
-  local ctid=$1
-  local name=$2
-  local timestamp
-  timestamp=$(date +"%Y%m%d-%H%M%S")
+PASSWORDS_FILE="/tmp/container-passwords.txt"
+> "$PASSWORDS_FILE"
 
-  local backup_dir="/home/papermc/backups/$name"
-  mkdir -p "$backup_dir"
+for name in "${!containers[@]}"; do
+  echo "📦 Creating LXC: $name (VMID $VMID)..."
 
-  msg_info "Backing up important data from $name ($ctid)..."
+  ROOT_PW="$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c20)"
+  echo "$name (CTID $VMID): $ROOT_PW" >> "$PASSWORDS_FILE"
 
-  pct exec "$ctid" -- bash -c "
-    mkdir -p /tmp/backup &&
-    if [ -d /data ]; then cp -r /data /tmp/backup/; fi &&
-    if [ -d /var/www/html ]; then cp -r /var/www/html /tmp/backup/; fi
-  "
-
-  pct stop "$ctid"
-  tar --zstd -cf "${backup_dir}/${name}-${timestamp}.tar.zst" -C "/var/lib/lxc/$ctid" .
-  pct start "$ctid"
-
-  # Cleanup /tmp/backup inside the container
-  pct exec "$ctid" -- rm -rf /tmp/backup
-
-  msg_ok "Backup completed: ${backup_dir}/${name}-${timestamp}.tar.zst"
-
-  # Cleanup old backups (keep last 7 only)
-  ls -t "${backup_dir}"/*.tar.zst | tail -n +8 | xargs -r rm -f
-}
-
-
-# Function to destroy a container safely
-destroy_container() {
-  local ctid=$1
-  local name=$2
-
-  if pct status "$ctid" >/dev/null 2>&1; then
-    backup_container "$ctid" "$name"
-    msg_info "Destroying container $ctid ($name)..."
-    pct stop "$ctid" || true
-    pct destroy "$ctid"
-    msg_ok "Destroyed container $ctid"
-  fi
-}
-
-# Main container creation loop
-for ctid in "${!containers[@]}"; do
-  name="${containers[$ctid]}"
-
-  # Special reinstall logic
-  if [[ "$MODE" == "--reinstall-website" && "$name" != "papermc-website" ]]; then
-    continue
-  fi
-  if [[ "$MODE" == "--reinstall-bluemap" && "$name" != "papermc-bluemap" ]]; then
-    continue
-  fi
-
-  # Check if container exists
-  if pct status "$ctid" >/dev/null 2>&1; then
-    if [[ "$MODE" == "--skip-existing" ]]; then
-      msg_info "Skipping existing container $ctid ($name)"
-      continue
-    fi
-    destroy_container "$ctid" "$name"
-  fi
-
-  # Create container
-  msg_info "Creating container $ctid ($name)..."
-  pct create "$ctid" "$TEMPLATE" \
-    -hostname "$name" \
-    -storage "$STORAGE" \
-    -rootfs "${STORAGE}:8" \
-    -memory 1024 \
+  pct create $VMID $TEMPLATE \
+    -hostname $name \
+    -storage $STORAGE \
+    -rootfs ${STORAGE}:8G \
+    -memory ${containers[$name]} \
     -cores 2 \
-    -net0 name=eth0,bridge="$BRIDGE",ip=dhcp \
+    -net0 name=eth0,bridge=$BRIDGE,ip=dhcp \
+    -password "$ROOT_PW" \
     -unprivileged 1 \
     -features nesting=1
-  pct start "$ctid"
-  msg_ok "Created and started container $ctid ($name)"
+
+  pct start $VMID
+  ((VMID++))
 done
 
-msg_ok "✅ All containers processed."
+# Transfer password file to papermc-server
+PAPERMCPATH="/home/papermc/container-passwords.txt"
+pct exec 200 -- mkdir -p /home/papermc
+pct push 200 "$PASSWORDS_FILE" "$PAPERMCPATH" --perms 600
+pct exec 200 -- chown papermc:papermc "$PAPERMCPATH"
+
+msg_ok "Passwords stored at $PAPERMCPATH inside papermc-server"

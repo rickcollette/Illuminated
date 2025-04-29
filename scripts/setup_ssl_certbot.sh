@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-
+source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
 echo "🔐 Setting up SSL with Certbot..."
 
 pct exec 204 -- bash -c "

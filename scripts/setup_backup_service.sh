@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-
+source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
 echo "💾 Setting up automatic backup service..."
 
 pct exec 202 -- bash -c "

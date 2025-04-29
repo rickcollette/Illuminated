@@ -1,37 +1,36 @@
 #!/bin/bash
 set -euo pipefail
 
-echo "🔧 Setting up Nginx Reverse Proxy..."
+# Load shared functions
+source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
 
-# Dynamically get container IPs
-WEB_IP=$(get_container_ip 201)
-BLUEMAP_IP=$(get_container_ip 202)
+msg_info "🔧 Setting up Nginx Reverse Proxy..."
 
-pct exec 204 -- bash -c "
-  apt update &&
-  apt install -y nginx &&
-  mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled &&
-  cat <<EOF >/etc/nginx/sites-available/illuminated
+CTID=204
+IP=$(get_container_ip $CTID)
+DOMAIN=${DOMAIN:-"example.com"}
+
+pct exec $CTID -- apt update
+pct exec $CTID -- apt install -y nginx
+
+pct exec $CTID -- bash -c "cat > /etc/nginx/sites-available/default" <<EOF
 server {
     listen 80;
-    server_name $DOMAIN;
+    server_name ${DOMAIN};
 
     location / {
-        proxy_pass http://${WEB_IP}:80/;
+        proxy_pass http://192.168.100.200:8080;
         proxy_set_header Host \$host;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP \$remote_addr;
     }
 
     location /map/ {
-        proxy_pass http://${BLUEMAP_IP}:8100/;
+        proxy_pass http://192.168.100.201:8100/;
         proxy_set_header Host \$host;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Real-IP \$remote_addr;
     }
 }
 EOF
-  ln -sf /etc/nginx/sites-available/illuminated /etc/nginx/sites-enabled/illuminated
-  nginx -t
-  systemctl reload nginx
-"
 
-echo "✅ Nginx Reverse Proxy Configured."
+pct exec $CTID -- systemctl restart nginx
+msg_ok "Nginx reverse proxy configured for http://${DOMAIN}"

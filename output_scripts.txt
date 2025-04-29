@@ -1,0 +1,340 @@
+
+/home/megalith/louminadi/git/illuminated/scripts/setup_reverse_proxy.sh:
+```sh
+#!/bin/bash
+set -euo pipefail
+
+# Load shared functions
+source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
+
+msg_info "🔧 Setting up Nginx Reverse Proxy..."
+
+CTID=204
+IP=$(get_container_ip $CTID)
+DOMAIN=${DOMAIN:-"example.com"}
+
+pct exec $CTID -- apt update
+pct exec $CTID -- apt install -y nginx
+
+pct exec $CTID -- bash -c "cat > /etc/nginx/sites-available/default" <<EOF
+server {
+    listen 80;
+    server_name ${DOMAIN};
+
+    location / {
+        proxy_pass http://192.168.100.200:8080;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+
+    location /map/ {
+        proxy_pass http://192.168.100.201:8100/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+}
+EOF
+
+pct exec $CTID -- systemctl restart nginx
+msg_ok "Nginx reverse proxy configured for http://${DOMAIN}"
+
+```
+---
+
+/home/megalith/louminadi/git/illuminated/scripts/create_containers.sh:
+```sh
+#!/bin/bash
+set -euo pipefail
+
+source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
+
+header_info "Creating LXC Containers"
+
+declare -A containers=(
+  [papermc-server]=12288
+  [papermc-bluemap]=4096
+  [papermc-backups]=1024
+  [papermc-website]=512
+  [papermc-proxy]=512
+)
+
+STORAGE="local-lvm"
+BRIDGE="vmbr0"
+VMID=200
+TEMPLATE_NAME="ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
+TEMPLATE="$STORAGE:vztmpl/$TEMPLATE_NAME"
+
+pveam update
+if ! pveam list $STORAGE | grep -q "$TEMPLATE_NAME"; then
+  msg_info "Downloading missing template..."
+  pveam download $STORAGE "$TEMPLATE_NAME"
+else
+  msg_ok "Template already available: $TEMPLATE_NAME"
+fi
+
+PASSWORDS_FILE="/tmp/container-passwords.txt"
+> "$PASSWORDS_FILE"
+
+for name in "${!containers[@]}"; do
+  echo "📦 Creating LXC: $name (VMID $VMID)..."
+
+  ROOT_PW="$(openssl rand -base64 24 | tr -dc 'A-Za-z0-9' | head -c20)"
+  echo "$name (CTID $VMID): $ROOT_PW" >> "$PASSWORDS_FILE"
+
+  pct create $VMID $TEMPLATE \
+    -hostname $name \
+    -storage $STORAGE \
+    -rootfs ${STORAGE}:8G \
+    -memory ${containers[$name]} \
+    -cores 2 \
+    -net0 name=eth0,bridge=$BRIDGE,ip=dhcp \
+    -password "$ROOT_PW" \
+    -unprivileged 1 \
+    -features nesting=1
+
+  pct start $VMID
+  ((VMID++))
+done
+
+# Transfer password file to papermc-server
+PAPERMCPATH="/home/papermc/container-passwords.txt"
+pct exec 200 -- mkdir -p /home/papermc
+pct push 200 "$PASSWORDS_FILE" "$PAPERMCPATH" --perms 600
+pct exec 200 -- chown papermc:papermc "$PAPERMCPATH"
+
+msg_ok "Passwords stored at $PAPERMCPATH inside papermc-server"
+
+```
+---
+
+/home/megalith/louminadi/git/illuminated/scripts/setup_static_website.sh:
+```sh
+#!/bin/bash
+set -euo pipefail
+source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
+echo "🌐 Setting up static website..."
+
+pct exec 203 -- bash -c "
+  apt update &&
+  apt install -y nginx &&
+  mkdir -p /var/www/louminadicraft &&
+  systemctl enable nginx
+"
+
+echo "✅ Static website container setup."
+
+```
+---
+
+/home/megalith/louminadi/git/illuminated/scripts/setup_bluemap.sh:
+```sh
+#!/bin/bash
+set -euo pipefail
+source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
+echo "🗺️ Setting up BlueMap Renderer..."
+
+pct exec 201 -- bash -c "
+  apt update &&
+  apt install -y openjdk-17-jre-headless curl &&
+  mkdir -p /data &&
+  curl -Lo /data/bluemap.jar https://hangar.papermc.io/api/v1/projects/Blue/BlueMap/versions/latest/download
+"
+
+echo "✅ BlueMap installed."
+
+# Setup Cron Job for Auto-Render
+echo "Setting up BlueMap auto-render every 4 hours..."
+pct exec 201 -- bash -c '
+echo "0 */4 * * * cd /data && java -jar bluemap.jar --render && systemctl restart bluemap" > /etc/cron.d/bluemap-render
+crontab /etc/cron.d/bluemap-render
+'
+
+echo "✅ BlueMap auto-render + auto-reload setup complete!"
+
+```
+---
+
+/home/megalith/louminadi/git/illuminated/scripts/setup_papermc_server.sh:
+```sh
+#!/bin/bash
+set -euo pipefail
+source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
+echo "🎮 Setting up PaperMC server..."
+
+# Install Java and curl
+pct exec 200 -- bash -c "
+  apt update &&
+  apt install -y openjdk-17-jre-headless curl unzip &&
+  mkdir -p /papermc/plugins &&
+  curl -Lo /papermc/paper.jar https://api.papermc.io/v2/projects/paper/versions/1.21.5/builds/41/downloads/paper-1.21.5-41.jar &&
+  echo 'eula=true' > /papermc/eula.txt
+"
+
+echo "📦 Installing essential plugins..."
+
+# Install plugins automatically
+pct exec 200 -- bash -c "
+  cd /papermc/plugins &&
+  
+  # Multiverse Core
+  curl -Lo Multiverse-Core.jar https://hangar.papermc.io/api/v1/projects/Multiverse/Multiverse-Core/versions/latest/download &&
+
+  # DirectionHUD
+  curl -Lo DirectionHUD.jar https://hangar.papermc.io/api/v1/projects/other/DirectionHUD/versions/latest/download &&
+
+  # GriefPrevention
+  curl -Lo GriefPrevention.jar https://hangar.papermc.io/api/v1/projects/GriefPrevention/GriefPrevention/versions/latest/download &&
+
+  # Machines
+  curl -Lo Machines.jar https://hangar.papermc.io/api/v1/projects/xenondevs/Machines/versions/latest/download &&
+
+  # SimplePets
+  curl -Lo SimplePets.jar https://hangar.papermc.io/api/v1/projects/BSDevelopment/SimplePets/versions/latest/download &&
+
+  # Jetpacks
+  curl -Lo Jetpacks.jar https://hangar.papermc.io/api/v1/projects/xenondevs/Jetpacks/versions/latest/download &&
+
+  # Coordinates
+  curl -Lo Coordinates.jar https://hangar.papermc.io/api/v1/projects/Maledict/Coordinates/versions/latest/download
+"
+
+echo "✅ Plugins installed!"
+
+# Setup Daily Minecraft Restart (for server memory stability)
+echo "Setting up daily Minecraft server restart..."
+pct exec 200 -- bash -c '
+echo "0 5 * * * systemctl restart minecraft" > /etc/cron.d/minecraft-restart
+crontab /etc/cron.d/minecraft-restart
+'
+
+echo "✅ Daily Minecraft server restart at 5:00AM configured!"
+
+
+```
+---
+
+/home/megalith/louminadi/git/illuminated/scripts/setup_backup_service.sh:
+```sh
+#!/bin/bash
+set -euo pipefail
+source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
+echo "💾 Setting up automatic backup service..."
+
+pct exec 202 -- bash -c "
+  apt update &&
+  apt install -y cron tar &&
+  mkdir -p /papermc/backups &&
+  echo '0 */4 * * * tar -czf /papermc/backups/backup-\$(date +\\%Y-\\%m-\\%d_\\%H-\\%M-\\%S).tar.gz -C /papermc world plugins && find /papermc/backups -name \"*.tar.gz\" -mtime +7 -delete' > /etc/cron.d/papermc-backups &&
+  chmod 0644 /etc/cron.d/papermc-backups &&
+  crontab /etc/cron.d/papermc-backups
+"
+
+echo "✅ Backup cron job installed."
+
+```
+---
+
+/home/megalith/louminadi/git/illuminated/scripts/setup_ssl_certbot.sh:
+```sh
+#!/bin/bash
+set -euo pipefail
+source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
+echo "🔐 Setting up SSL with Certbot..."
+
+pct exec 204 -- bash -c "
+  apt update &&
+  apt install -y certbot python3-certbot-nginx &&
+  certbot --nginx --non-interactive --agree-tos --redirect --email admin@$MYDOMAIN -d $DOMAIN
+"
+
+echo "✅ SSL Certificate Obtained and Installed."
+
+```
+---
+
+/home/megalith/louminadi/git/illuminated/scripts/build.func:
+```func
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Now with more of Steve's Mom.
+
+# Colors
+RED='\033[0;91m'
+GREEN='\033[0;92m'
+YELLOW='\033[0;93m'
+CYAN='\033[0;96m'
+NC='\033[0m' # No Color
+BOLD="\033[1m"
+TAB="  "
+CM="${TAB}✔️${TAB}"
+CROSS="${TAB}✖️${TAB}"
+
+# Functions for Messaging
+msg_info() {
+  echo -e "${CYAN}[INFO]${NC} $1"
+}
+
+msg_ok() {
+  echo -e "${GREEN}[OK]${NC} $1"
+}
+
+msg_error() {
+  echo -e "${RED}[ERROR]${NC} $1"
+}
+
+header_info() {
+  echo -e "${YELLOW}========================================"
+  echo -e " $1"
+  echo -e "========================================${NC}"
+}
+
+catch_errors() {
+  trap 'msg_error "An unexpected error occurred at line $LINENO: $BASH_COMMAND" && exit 1' ERR
+}
+
+# Check Environment
+shell_check() {
+  if [[ "$(basename "$SHELL")" != "bash" ]]; then
+    msg_error "Default shell is not Bash. Please use Bash."
+    exit 1
+  fi
+}
+
+root_check() {
+  if [[ "$(id -u)" -ne 0 ]]; then
+    msg_error "Run this script as root."
+    exit 1
+  fi
+}
+
+pve_check() {
+  if ! pveversion | grep -q "pve-manager/8"; then
+    msg_error "This installer requires Proxmox VE 8.x."
+    exit 1
+  fi
+}
+
+arch_check() {
+  if [[ "$(dpkg --print-architecture)" != "amd64" ]]; then
+    msg_error "Only amd64 architecture supported."
+    exit 1
+  fi
+}
+
+check_container_storage() {
+  local storage=$1
+  if ! pvesm status | grep -qw "$storage"; then
+    msg_error "Storage '$storage' not found."
+    exit 1
+  fi
+}
+
+# Dynamically get container IP
+get_container_ip() {
+  local ctid=$1
+  pct exec "$ctid" -- ip -4 addr show eth0 | awk '/inet / {print $2}' | cut -d/ -f1
+}
+
+```
+---

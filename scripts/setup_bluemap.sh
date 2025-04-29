@@ -1,15 +1,22 @@
 #!/bin/bash
 set -euo pipefail
-
-echo "🛠️ Setting up BlueMap auto-renders..."
+source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
+echo "🗺️ Setting up BlueMap Renderer..."
 
 pct exec 201 -- bash -c "
   apt update &&
-  apt install -y cron &&
-  echo '0 */4 * * * cd /data && java -jar bluemap.jar --renderall >> /var/log/bluemap-render.log 2>&1' > /etc/cron.d/bluemap-render &&
-  chmod 0644 /etc/cron.d/bluemap-render &&
-  touch /var/log/bluemap-render.log &&
-  service cron restart
+  apt install -y openjdk-17-jre-headless curl &&
+  mkdir -p /data &&
+  curl -Lo /data/bluemap.jar https://hangar.papermc.io/api/v1/projects/Blue/BlueMap/versions/latest/download
 "
 
-echo "✅ BlueMap auto-render setup complete! (every 4 hours)"
+echo "✅ BlueMap installed."
+
+# Setup Cron Job for Auto-Render
+echo "Setting up BlueMap auto-render every 4 hours..."
+pct exec 201 -- bash -c '
+echo "0 */4 * * * cd /data && java -jar bluemap.jar --render && systemctl restart bluemap" > /etc/cron.d/bluemap-render
+crontab /etc/cron.d/bluemap-render
+'
+
+echo "✅ BlueMap auto-render + auto-reload setup complete!"

@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-
+source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
 echo "🎮 Setting up PaperMC server..."
 
 # Install Java and curl
@@ -41,3 +41,13 @@ pct exec 200 -- bash -c "
 "
 
 echo "✅ Plugins installed!"
+
+# Setup Daily Minecraft Restart (for server memory stability)
+echo "Setting up daily Minecraft server restart..."
+pct exec 200 -- bash -c '
+echo "0 5 * * * systemctl restart minecraft" > /etc/cron.d/minecraft-restart
+crontab /etc/cron.d/minecraft-restart
+'
+
+echo "✅ Daily Minecraft server restart at 5:00AM configured!"
+
