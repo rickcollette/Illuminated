@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export VERSION="1.0.7"
+export VERSION="1.0.8"
 
 # Require DOMAIN and DISCORD_WEBHOOK
 if [[ -z "${DOMAIN:-}" || -z "${DISCORD_WEBHOOK:-}" ]]; then
@@ -30,6 +30,21 @@ BASE_URL="https://raw.githubusercontent.com/rickcollette/illuminated/main/script
 MODE="${1:-default}"
 msg_info "Selected mode: ${MODE}"
 
+pause_for_fw() {
+  # Show internal IPs of all containers before requesting SSL
+header_info "📡 Internal IP Addresses (configure your firewall/NAT before continuing)"
+
+for CTID in 200 201 202 203 204; do
+  NAME=$(pct config $CTID | grep -i hostname | awk '{print $2}')
+  IP=$(get_container_ip "$CTID")
+  echo -e "${CYAN}• ${NAME}:${NC} $IP"
+done
+
+echo -e "\n${YELLOW}🔒 Ensure DNS A/AAAA records for ${DOMAIN} point to your public IP."
+echo -e "🧱 Ensure port 80/443 is forwarded to papermc-proxy container (${CYAN}CTID 204${NC})\n"
+read -rp "🚀 Press Enter to continue with SSL setup, or Ctrl+C to abort..."
+}
+
 run_script() {
   local script_name=$1
   msg_info "Running ${script_name}..."
@@ -43,6 +58,7 @@ if [[ "$MODE" == "--skip-existing" ]]; then
   run_script setup_bluemap.sh
   run_script setup_backup_service.sh
   run_script setup_static_website.sh
+  pause_for_fw
   run_script setup_reverse_proxy.sh
   run_script setup_ssl_certbot.sh
 elif [[ "$MODE" == "--reinstall-bluemap" ]]; then
@@ -56,6 +72,7 @@ else
   run_script setup_backup_service.sh
   run_script setup_static_website.sh
   run_script setup_reverse_proxy.sh
+  pause_for_fw
   run_script setup_ssl_certbot.sh
 fi
 

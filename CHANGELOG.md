@@ -1,5 +1,13 @@
 # 📜 Changelog
 
+## [1.0.8] - 2025-05-02
+
+### Added for 1.0.8
+
+### Fixed
+
+- added pause_for_fw to fix issue where letsencrypt is required
+
 ## [1.0.5] - 2025-05-02
 
 ### Added for 1.0.5
