@@ -10,23 +10,22 @@ if [[ -z "${DOMAIN:-}" || -z "${DISCORD_WEBHOOK:-}" ]]; then
   exit 1
 fi
 
-# Export for all sub-scripts
+# Export for sub-scripts
 export DOMAIN
 export DISCORD_WEBHOOK
+export TEMPLATE_STORAGE="local"
+export STORAGE="local-lvm"
+export BRIDGE="vmbr0"
 
 # Load build helpers
 source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
 
 APP="LouMinadiCraft Illuminated"
-BRIDGE="vmbr0"
-STORAGE="local-lvm"
-
 header_info "$APP Setup"
 catch_errors
 
 BASE_URL="https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts"
 MODE="${1:-default}"
-
 msg_info "Selected mode: ${MODE}"
 
 run_script() {
@@ -35,7 +34,7 @@ run_script() {
   bash <(curl -fsSL "${BASE_URL}/${script_name}") "$MODE"
 }
 
-# Main logic
+# Mode-based logic
 if [[ "$MODE" == "--skip-existing" ]]; then
   run_script create_containers.sh
   run_script setup_papermc_server.sh
@@ -58,7 +57,7 @@ else
   run_script setup_ssl_certbot.sh
 fi
 
-# Final Screen
+# Final screen
 clear
 header_info "🎉 LouMinadiCraft Illuminated Installed Successfully!"
 msg_ok "Minecraft Server ready!"
@@ -71,7 +70,6 @@ echo -e "${CYAN}• Minecraft Server:${NC} Connect using ${DOMAIN} at port 25565
 echo -e "${CYAN}• Static Website:${NC} https://${DOMAIN}"
 echo -e "${CYAN}• BlueMap:${NC} https://${DOMAIN}/map"
 
-# Write access info
 ACCESS_FILE="/home/papermc/access-info.txt"
 mkdir -p "$(dirname "$ACCESS_FILE")"
 cat > "$ACCESS_FILE" <<EOF
@@ -86,15 +84,7 @@ EOF
 
 msg_ok "Saved access information to ${ACCESS_FILE}"
 
-# Discord notification
-DISCORD_MESSAGE="🎮 LouMinadiCraft Illuminated Setup Complete!
-
-• Minecraft Server: ${DOMAIN} :25565
-• Website: https://${DOMAIN}
-• BlueMap: https://${DOMAIN}/map
-
-✅ Installation Completed Successfully!"
-
 curl -H "Content-Type: application/json" -X POST \
-  -d "{\"content\": \"$DISCORD_MESSAGE\"}" "$DISCORD_WEBHOOK"
+  -d "{\"content\": \"🎮 LouMinadiCraft Illuminated Setup Complete!\n• Minecraft Server: ${DOMAIN} :25565\n• Website: https://${DOMAIN}\n• BlueMap: https://${DOMAIN}/map\n✅ Installation Completed Successfully!\"}" \
+  "$DISCORD_WEBHOOK"
 msg_ok "Sent access information to Discord!"

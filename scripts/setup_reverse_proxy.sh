@@ -1,7 +1,5 @@
 #!/bin/bash
 set -euo pipefail
-
-# Load shared functions
 source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
 
 msg_info "🔧 Setting up Nginx Reverse Proxy..."
