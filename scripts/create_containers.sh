@@ -32,7 +32,7 @@ declare -A container_cores=(
 
 TEMPLATE_STORAGE="local"
 CONTAINER_STORAGE="local-lvm"
-BRIDGE="vmbr0"
+BRIDGE="vmbr1"
 VMID=200
 TEMPLATE_NAME="ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
 TEMPLATE="$TEMPLATE_STORAGE:vztmpl/$TEMPLATE_NAME"

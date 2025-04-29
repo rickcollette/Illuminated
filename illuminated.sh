@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export VERSION="1.0.8"
+export VERSION="1.0.9"
 
 # Require DOMAIN and DISCORD_WEBHOOK
 if [[ -z "${DOMAIN:-}" || -z "${DISCORD_WEBHOOK:-}" ]]; then
@@ -17,7 +17,7 @@ export DOMAIN
 export DISCORD_WEBHOOK
 export TEMPLATE_STORAGE="local"
 export STORAGE="local-lvm"
-export BRIDGE="vmbr0"
+export BRIDGE="vmbr1"
 
 # Load build helpers
 source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
