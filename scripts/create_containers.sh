@@ -1,76 +1,104 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -euo pipefail
 
-echo "📦 Creating LXC Containers..."
+source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
+
+# Define container settings
+declare -A containers
+containers=(
+  [200]="papermc-server"
+  [201]="papermc-bluemap"
+  [202]="papermc-backups"
+  [203]="papermc-website"
+  [204]="papermc-proxy"
+)
 
 TEMPLATE="local:vztmpl/ubuntu-24.04-standard_24.04-2_amd64.tar.zst"
+STORAGE="local-lvm"
+BRIDGE="vmbr0"
 
-# Ensure template exists
-if ! pveam list local | grep -q "ubuntu-24.04-standard"; then
-  msg_info "Downloading Ubuntu 24.04 template..."
-  pveam download local ubuntu-24.04-standard_24.04-2_amd64.tar.zst
-fi
+MODE="${1:-default}"  # default, skip-existing, reinstall-website, reinstall-bluemap
 
-# Define CTIDs
-CTID_PAPERMCSERVER=200
-CTID_BLUEMAP=201
-CTID_BACKUPS=202
-CTID_WEBSITE=203
-CTID_PROXY=204
+# Function to backup container data
+backup_container() {
+  local ctid=$1
+  local name=$2
+  local timestamp
+  timestamp=$(date +"%Y%m%d-%H%M%S")
 
-# Create PaperMC Server
-pct create $CTID_PAPERMCSERVER $TEMPLATE \
-  -hostname papermc-server \
-  -storage local-lvm \
-  -memory 12288 -cores 4 \
-  -net0 name=eth0,bridge=vmbr0,ip=dhcp \
-  -unprivileged 1 \
-  -features nesting=1
-pct start $CTID_PAPERMCSERVER
-msg_ok "PaperMC Server container created."
+  local backup_dir="/home/papermc/backups/$name"
+  mkdir -p "$backup_dir"
 
-# Create BlueMap Server
-pct create $CTID_BLUEMAP $TEMPLATE \
-  -hostname papermc-bluemap \
-  -storage local-lvm \
-  -memory 4096 -cores 2 \
-  -net0 name=eth0,bridge=vmbr0,ip=dhcp \
-  -unprivileged 1 \
-  -features nesting=1
-pct start $CTID_BLUEMAP
-msg_ok "BlueMap container created."
+  msg_info "Backing up important data from $name ($ctid)..."
 
-# Create Backups Server
-pct create $CTID_BACKUPS $TEMPLATE \
-  -hostname papermc-backups \
-  -storage local-lvm \
-  -memory 1024 -cores 1 \
-  -net0 name=eth0,bridge=vmbr0,ip=dhcp \
-  -unprivileged 1 \
-  -features nesting=1
-pct start $CTID_BACKUPS
-msg_ok "Backup container created."
+  pct exec "$ctid" -- bash -c "
+    mkdir -p /tmp/backup &&
+    if [ -d /data ]; then cp -r /data /tmp/backup/; fi &&
+    if [ -d /var/www/html ]; then cp -r /var/www/html /tmp/backup/; fi
+  "
 
-# Create Website Server
-pct create $CTID_WEBSITE $TEMPLATE \
-  -hostname papermc-website \
-  -storage local-lvm \
-  -memory 512 -cores 1 \
-  -net0 name=eth0,bridge=vmbr0,ip=dhcp \
-  -unprivileged 1 \
-  -features nesting=1
-pct start $CTID_WEBSITE
-msg_ok "Static website container created."
+  pct stop "$ctid"
+  tar --zstd -cf "${backup_dir}/${name}-${timestamp}.tar.zst" -C "/var/lib/lxc/$ctid" .
+  pct start "$ctid"
 
-# Create Reverse Proxy Server
-pct create $CTID_PROXY $TEMPLATE \
-  -hostname papermc-proxy \
-  -storage local-lvm \
-  -memory 512 -cores 1 \
-  -net0 name=eth0,bridge=vmbr0,ip=dhcp \
-  -unprivileged 1 \
-  -features nesting=1
-pct start $CTID_PROXY
-msg_ok "Reverse Proxy container created."
+  # Cleanup /tmp/backup inside the container
+  pct exec "$ctid" -- rm -rf /tmp/backup
 
-echo "✅ All LXC Containers Created!"
+  msg_ok "Backup completed: ${backup_dir}/${name}-${timestamp}.tar.zst"
+
+  # Cleanup old backups (keep last 7 only)
+  ls -t "${backup_dir}"/*.tar.zst | tail -n +8 | xargs -r rm -f
+}
+
+
+# Function to destroy a container safely
+destroy_container() {
+  local ctid=$1
+  local name=$2
+
+  if pct status "$ctid" >/dev/null 2>&1; then
+    backup_container "$ctid" "$name"
+    msg_info "Destroying container $ctid ($name)..."
+    pct stop "$ctid" || true
+    pct destroy "$ctid"
+    msg_ok "Destroyed container $ctid"
+  fi
+}
+
+# Main container creation loop
+for ctid in "${!containers[@]}"; do
+  name="${containers[$ctid]}"
+
+  # Special reinstall logic
+  if [[ "$MODE" == "--reinstall-website" && "$name" != "papermc-website" ]]; then
+    continue
+  fi
+  if [[ "$MODE" == "--reinstall-bluemap" && "$name" != "papermc-bluemap" ]]; then
+    continue
+  fi
+
+  # Check if container exists
+  if pct status "$ctid" >/dev/null 2>&1; then
+    if [[ "$MODE" == "--skip-existing" ]]; then
+      msg_info "Skipping existing container $ctid ($name)"
+      continue
+    fi
+    destroy_container "$ctid" "$name"
+  fi
+
+  # Create container
+  msg_info "Creating container $ctid ($name)..."
+  pct create "$ctid" "$TEMPLATE" \
+    -hostname "$name" \
+    -storage "$STORAGE" \
+    -rootfs "${STORAGE}:8G" \
+    -memory 1024 \
+    -cores 2 \
+    -net0 name=eth0,bridge="$BRIDGE",ip=dhcp \
+    -unprivileged 1 \
+    -features nesting=1
+  pct start "$ctid"
+  msg_ok "Created and started container $ctid ($name)"
+done
+
+msg_ok "✅ All containers processed."
