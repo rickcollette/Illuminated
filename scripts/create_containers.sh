@@ -1,9 +1,21 @@
-#!/bin/bash -x
-set -euo pipefail
+#!/usr/bin/env bash
+source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/main/scripts/build.func)
 
-echo "🚀 Creating LXC containers..."
+header_info "Creating LXC Containers"
+catch_errors
 
-# Define container memory sizes
+# Storage and Bridge settings
+STORAGE="local"
+BRIDGE="vmbr0"
+TAGS="minecraft"
+
+# Latest Ubuntu 24.04 Template
+TEMPLATE_NAME=$(pveam available | grep ubuntu-24.04-standard | sort | tail -n 1 | awk '{print $2}')
+pveam download $STORAGE $TEMPLATE_NAME || true
+OSTEMPLATE="$STORAGE:vztmpl/$TEMPLATE_NAME"
+
+CTID=200
+
 declare -A containers=(
   [papermc-server]=12288
   [papermc-bluemap]=4096
@@ -12,49 +24,15 @@ declare -A containers=(
   [papermc-proxy]=512
 )
 
-# Storage and Bridge
-STORAGE="local"
-BRIDGE="vmbr0"
-VMID=200
+for container in "${!containers[@]}"; do
+  HOSTNAME=$container
+  MEMORY=${containers[$container]}
+  CORES=2
+  DISK=8
 
-echo "VERSION: 1.0.3"
-
-# Find latest Ubuntu 24.04 template
-function find_latest_template() {
-  pveam update
-  TEMPLATE_NAME=$(pveam available | grep ubuntu-24.04-standard | sort | tail -n 1 | awk '{print $2}')
-  echo "$TEMPLATE_NAME"
-}
-
-# Download template if missing
-function ensure_template() {
-  local tmpl=$1
-  if ! pveam list $STORAGE | grep -q "$tmpl"; then
-    echo "⚡ Template $tmpl not found in storage $STORAGE, downloading..."
-    pveam download $STORAGE $tmpl
-  else
-    echo "✅ Template $tmpl already available in $STORAGE."
-  fi
-}
-
-# Main logic
-TEMPLATE_NAME=$(find_latest_template)
-ensure_template "$TEMPLATE_NAME"
-
-# Now create containers
-for name in "${!containers[@]}"; do
-  echo "📦 Creating LXC: $name (VMID $VMID)..."
-  pct create $VMID -ostemplate $TEMPLATE_NAME \
-    -hostname $name \
-    -storage $STORAGE \
-    -rootfs ${STORAGE}:8G \
-    -memory ${containers[$name]} \
-    -cores 2 \
-    -net0 name=eth0,bridge=$BRIDGE,ip=dhcp \
-    -unprivileged 1 \
-    -features nesting=1
-  pct start $VMID
-  ((VMID++))
+  msg_info "Creating $HOSTNAME (CTID $CTID)..."
+  build_container
+  pct start $CTID
+  msg_ok "$HOSTNAME started!"
+  ((CTID++))
 done
-
-echo "✅ All containers created successfully!"

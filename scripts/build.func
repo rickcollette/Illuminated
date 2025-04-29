@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+RED='\033[0;91m'
+GREEN='\033[0;92m'
+YELLOW='\033[0;93m'
+CYAN='\033[0;96m'
+NC='\033[0m' # No Color
+
+msg_info() {
+  echo -e "${CYAN}[INFO]${NC} $1"
+}
+
+msg_ok() {
+  echo -e "${GREEN}[OK]${NC} $1"
+}
+
+msg_error() {
+  echo -e "${RED}[ERROR]${NC} $1"
+}
+
+header_info() {
+  echo -e "${YELLOW}========================================"
+  echo -e " $1"
+  echo -e "========================================${NC}"
+}
+
+catch_errors() {
+  trap 'msg_error "An unexpected error occurred. Exiting..." && exit 1' ERR
+}
+
+build_container() {
+  pct create ${CTID} ${OSTEMPLATE} \
+    -arch amd64 \
+    -hostname ${HOSTNAME} \
+    -cores ${CORES} \
+    -memory ${MEMORY} \
+    -net0 name=eth0,bridge=${BRIDGE},ip=dhcp \
+    -rootfs ${STORAGE}:${DISK} \
+    -features nesting=1 \
+    -unprivileged 1 \
+    -tags ${TAGS}
+}
