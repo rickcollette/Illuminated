@@ -5,7 +5,7 @@ header_info "Creating LXC Containers"
 catch_errors
 
 # Storage and Bridge settings
-STORAGE="local"
+STORAGE="local-lvm"
 BRIDGE="vmbr0"
 TAGS="minecraft"
 

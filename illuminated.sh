@@ -5,7 +5,7 @@ source <(curl -fsSL https://raw.githubusercontent.com/rickcollette/illuminated/m
 
 APP="LouMinadiCraft Illuminated"
 BRIDGE="vmbr0"
-STORAGE="local"
+STORAGE="local-lvm"
 
 header_info "$APP Setup"
 catch_errors
